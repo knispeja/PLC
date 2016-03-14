@@ -1,5 +1,5 @@
 ; Jacob Knispel
-; Assignment 5
+; Assignment 5a
 
 ; ---------------------------- Problem 1 ----------------------------
 
@@ -22,11 +22,32 @@
 				  	    (cadr i2))))
 			(list i1 i2)))
 
+(define (remove-first value ls)
+	(if (equal? value (car ls))
+		(cdr ls)
+		(cons (car ls) (remove value (cdr ls)))
+	))
+
 (define (minimize-interval-list ls)
 	(if (null? ls)
-		(append (minimize-list-via-range ls (car ls)) (product (cdr set1) set2))
 		'()
-	)) 
+		(if (null? (cdr ls))
+			ls
+			(let ((result (minimize-interval-helper (car ls) (cdr ls) (cdr ls))))
+					(cons (car result) (minimize-interval-list (cdr result))))
+		)
+	))
+
+(define (minimize-interval-helper elem ls orig)
+	(cond
+		((null? ls) (cons elem orig))
+		(else (let ((union (interval-union (car ls) elem)))
+				(cond
+					((eq? 2 (length union)) (minimize-interval-helper elem (cdr ls) orig))
+					(else (minimize-interval-helper (car union) (cdr ls) (remove-first (car ls) orig)))
+				)))
+	))
+
 
 ; ---------------------------- Problem 2 ----------------------------
 (define (exists? pred ls)

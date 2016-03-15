@@ -25,7 +25,7 @@
 (define (remove-first value ls)
 	(if (equal? value (car ls))
 		(cdr ls)
-		(cons (car ls) (remove value (cdr ls)))
+		(cons (car ls) (remove-first value (cdr ls)))
 	))
 
 (define (minimize-interval-list ls)

@@ -12,3 +12,6 @@
 	)))
 	(helper ls '())
 ))
+
+; ---------------------------- Problem 4 ----------------------------
+(define (subst-leftmost new old slist)

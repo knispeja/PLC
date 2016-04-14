@@ -1,156 +1,92 @@
 ; Jacob Knispel
 ; Assignment 10b
 
-; ---------------------------- Problem 1 ----------------------------
-(define (free-vars e)
-	(letrec ((helper (lambda (e binding)
+; ---------------------------- Problem 3 ----------------------------
+(define (lexical-address e)
+	(letrec ((helper (lambda (e binding d)
 		(cond
 			((null? e) '())
-			((list? e) (if (eq? (car e) 'lambda)
-						   (helper (caddr e) (append (cadr e) binding))
-						   (append-sets (helper (car e) binding) (helper (cdr e) binding))
+			((list? e) (case (car e)
+							((if) (cons 'if (helper (cdr e) binding d)))
+							((lambda) (list 'lambda (cadr e) (helper (caddr e) (lex-dict-set-many binding (cadr e) (+ 1 d)) (+ 1 d))))
+							((set!) (list 'set! (cadr e) (helper (caddr e) binding d)))
+							((let) (letrec ((lethelper (lambda (letexp)
+										(if (null? letexp)
+											'()
+											(cons (cons (car (car letexp)) (list (helper (cadr (car letexp)) binding d))) (lethelper (cdr letexp)))
+										))))
+										(list 'let 
+											 	(lethelper (cadr e)) 
+											 	(helper (caddr e) (lex-dict-set-many binding (map car (cadr e)) (+ 1 d)) (+ 1 d))
+										)))
+							(else (cons
+										(helper (car e) binding d)
+										(helper (cdr e) binding d)))
 						))
-			((member e binding) '())
-			(else (list e))
+			((lex-dict-get binding e) (list ': (- d (car (lex-dict-get binding e))) (cadr (lex-dict-get binding e))))
+			(else (list ': 'free e))
 		))))
-	(helper e '())
+	(helper e '() -1)
 ))
 
-(define (bound-vars e)
-	(letrec ((helper (lambda (e binding)
-		(cond
-			((null? e) '())
-			((list? e) (if (eq? (car e) 'lambda)
-						   (helper (caddr e) (append (cadr e) binding))
-						   (append-sets (helper (car e) binding) (helper (cdr e) binding))
-						))
-			((member e binding) (list e))
-			(else '())
-		))))
-	(helper e '())
-))
-
-(define (append-sets set1 set2)
+; lex-dict holds entries like (var, (depth, pos))
+(define (lex-dict-get dict elem)
 	(cond
-		((null? set1) set2)
-		((member (car set1) set2) (append-sets (cdr set1) set2))
-		(else (cons (car set1) (append-sets (cdr set1) set2)))
-	)
-)
+		((null? dict) #f)
+		((eq? (car (car dict)) elem) (cadr (car dict)))
+		(else (lex-dict-get (cdr dict) elem))
+	))
 
-; ---------------------------- Problem 2 ----------------------------
-(define (free-vars e . bound-vars)
-	(letrec ((helper (lambda (e binding)
-		(cond
-			((null? e) '())
-			((list? e) (cond
-							((eq? (car e) 'let) (append-sets 
-															(free-vars-let (cadr e) binding)
-															(helper (caddr e) (append (map car (cadr e)) binding))))
-							((eq? (car e) 'let*) (append-sets
-															(free-vars-let* (cadr e) binding)
-															(helper (caddr e) (append (map car (cadr e)) binding))))
-							((eq? (car e) 'lambda) (helper (caddr e) (append (cadr e) binding)))
-							((eq? (car e) 'set!) (helper (caddr e) binding))
-							(else (append-sets 
-											(helper (car e) binding) 
-											(helper (cdr e) binding)))
-						))
-			((member e binding) '())
-
-			(else (list e))
-		))))
-	(if (null? bound-vars)
-		(helper e '())
-		(helper e (car bound-vars)))
+(define (lex-dict-set-many dict elems depth)
+	(letrec ((helper (lambda (dict elems pos)
+		(if (null? elems)
+			dict
+			(helper (lex-dict-set dict (car elems) depth pos) (cdr elems) (+ 1 pos))
+		)
+	)))
+	(helper dict elems 0)
 ))
 
-(define (free-vars-let* lets bound-vars)
-	(if (null? lets)
-		'()
-		(append-sets 
-				(free-vars (cadr (car lets)) bound-vars) 
-				(free-vars-let* (cdr lets) (cons (car (car lets)) bound-vars))
-		)
-	)
-)
+(define (lex-dict-set dict elem depth pos)
+	(cond
+		((null? dict) (list (list elem (list depth pos))))
+		((eq? (car (car dict)) elem) (cons (list elem (list depth pos)) (cdr dict)))
+		(else (cons (car dict) (lex-dict-set (cdr dict) elem depth pos)))
+	))
 
-(define (free-vars-let lets bound-vars)
-	(if (null? lets)
-		'()
-		(append-sets 
-				(free-vars (cadr (car lets)) bound-vars) 
-				(free-vars-let (cdr lets) bound-vars)
-		)
-	)
-)
-
-(define (occurs-free? sym e)
-	(cond 
-		((eq? sym 'let) #f)
-		((eq? sym 'set!) #f)
-		((eq? sym 'lambda) #f)
-		((eq? sym 'let*) #f)
-		((member sym (free-vars e)) #t)
-		(else #f)
-	)
-)
-
-
-
-
-
-
-
-(define (bound-vars e . binding)
-	(letrec ((helper (lambda (e binding)
+; ---------------------------- Problem 4 ----------------------------
+(define (un-lexical-address e)
+	(letrec ((helper (lambda (e binding d)
 		(cond
 			((null? e) '())
-			((list? e) (cond
-							((eq? (car e) 'let) (append-sets 
-															(bound-vars-let (cadr e) binding)
-															(helper (caddr e) (append (map car (cadr e)) binding))))
-							((eq? (car e) 'let*) (append-sets
-															(bound-vars-let* (cadr e) binding)
-															(helper (caddr e) (append (map car (cadr e)) binding))))
-							((eq? (car e) 'lambda) (helper (caddr e) (append (cadr e) binding)))
-							((eq? (car e) 'set!) (helper (caddr e) binding))
-							(else (append-sets 
-											(helper (car e) binding) 
-											(helper (cdr e) binding)))
+			((list? e) (case (car e)
+							((:) (if (eq? (cadr e) 'free)
+									(caddr e)
+									(lex-dict-get-elem binding (- d (cadr e)) (caddr e))))
+							((if) (cons 'if (helper (cdr e) binding d)))
+							((lambda) (list 'lambda (cadr e) (helper (caddr e) (lex-dict-set-many binding (cadr e) (+ 1 d)) (+ 1 d))))
+							((set!) (list 'set! (cadr e) (helper (caddr e) binding d)))
+							((let) (letrec ((lethelper (lambda (letexp)
+										(if (null? letexp)
+											'()
+											(cons (cons (car (car letexp)) (list (helper (cadr (car letexp)) binding d))) (lethelper (cdr letexp)))
+										))))
+										(list 'let 
+											 	(lethelper (cadr e)) 
+											 	(helper (caddr e) (lex-dict-set-many binding (map car (cadr e)) (+ 1 d)) (+ 1 d))
+										)))
+							(else (cons
+										(helper (car e) binding d)
+										(helper (cdr e) binding d)))
 						))
-			((member e binding) (list e))
-
-			(else '())
+			(else 'PROBLEM)
 		))))
-	(if (null? binding)
-		(helper e '())
-		(helper e (car binding)))
+	(helper e '() -1)
 ))
 
-(define (bound-vars-let* lets binding)
-	(if (null? lets)
-		'()
-		(append-sets 
-				(bound-vars (cadr (car lets)) binding) 
-				(bound-vars-let* (cdr lets) (cons (car (car lets)) binding))
-		)
-	)
-)
-
-(define (bound-vars-let lets binding)
-	(if (null? lets)
-		'()
-		(append-sets 
-				(bound-vars (cadr (car lets)) binding) 
-				(bound-vars-let (cdr lets) binding)
-		)
-	)
-)
-
-(define (occurs-bound? sym e)
-	(if (member sym (bound-vars e))
-		#t
-		#f
-	)
-)
+(define (lex-dict-get-elem dict depth pos)
+	(cond
+		((null? dict) #f)
+		((and (eq? (car (cadr (car dict))) depth) (eq? (cadr (cadr (car dict))) pos)) (car (car dict)))
+		(else (lex-dict-get-elem (cdr dict) depth pos))
+	))
